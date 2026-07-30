@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: capacity
+          POSTGRES_PASSWORD: capacity
+          POSTGRES_DB: capacity_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U capacity -d capacity_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://capacity:capacity@localhost:5432/capacity_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm test:integration
+      - run: pnpm test:e2e
+      - run: pnpm build
+      - name: Verify production artifacts
+        run: |
+          test -f dist/src/main.js
+          test -f dist/src/worker.js
+          test -f dist/src/database/data-source.js
+          test -f dist/scripts/seed.js
+      - run: docker build --tag program-capacity-service:ci .

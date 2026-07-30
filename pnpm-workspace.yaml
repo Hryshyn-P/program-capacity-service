@@ -1,0 +1,9 @@
+onlyBuiltDependencies:
+  - esbuild
+
+ignoredBuiltDependencies:
+  - "@scarf/scarf"
+  - cpu-features
+  - protobufjs
+  - ssh2
+  - unrs-resolver
