@@ -10,7 +10,7 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    "types": ["node", "jest"],
     "incremental": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
