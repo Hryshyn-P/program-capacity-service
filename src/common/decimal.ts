@@ -6,6 +6,8 @@ Decimal.set({ precision: 50, rounding: Decimal.ROUND_HALF_EVEN });
 export const MONEY_SCALE = 6;
 export const FX_SCALE = 12;
 export const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+export const MONEY_PATTERN = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,6})?$/;
+export const FX_RATE_PATTERN = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,12})?$/;
 const NUMERIC_PRECISION = 24;
 
 export function parseDecimal(value: string, field: string): Decimal {

@@ -91,20 +91,29 @@ pnpm smoke:kafka
 
 Both event types contain UUID `eventId`, decimal-string monetary fields,
 decimal-string `version`, ISO timestamp, and state. `PROGRAM_CAPACITY_UPDATED`
-updates the limit while preserving reservations; it cannot change currency
-while reservations are active. `PROGRAM_RECONCILED` supplies the complete
+updates the limit while preserving reservations; it cannot change currency.
+`PROGRAM_RECONCILED` supplies the complete
 reservation set and optional declared active aggregate.
 
 `pnpm smoke:kafka` creates an isolated `smoke-*` program, publishes both event
-types, and polls the authenticated HTTP API to prove the broker-to-database
-path. Run it after `docker compose up --build`; it honors the JWT and Kafka
-variables from `.env` and otherwise uses the same local defaults as Compose.
+types, replays a duplicate, verifies an invalid payload in the DLQ, and polls
+the authenticated HTTP API to prove the broker-to-database path. Run it after
+`docker compose up --build`; it honors the JWT and Kafka variables from `.env`
+and otherwise uses the same local defaults as Compose. CI runs this probe
+against the complete Compose stack.
 
 ## Correctness semantics
 
 - Money is never a JavaScript float. Decimal.js uses precision 50 and half-even
-  rounding to six places. FX direction is: one invoice-currency unit equals
+  rounding to six places for multiplication results. Input money is limited to
+  18 integer and 6 fractional digits; FX is limited to 12 integer and 12
+  fractional digits so accepted values always fit PostgreSQL `NUMERIC(24,6)`
+  and `NUMERIC(24,12)`. FX direction is: one invoice-currency unit equals
   `fxRate` program-currency units. Same-currency FX is exactly one.
+- A program currency is immutable after creation. Every treasury update and
+  reconciliation snapshot must use the existing currency. Changing currency
+  requires a new program or a separate accounting migration because existing
+  reservations are fixed in the original program currency.
 - A program row lock serializes every mutation. Exact capacity is allowed;
   negative availability blocks reservations but releases remain possible.
 - `(programId, invoiceId)` plus a normalized SHA-256 fingerprint makes HTTP
@@ -140,6 +149,6 @@ Integration/e2e tests use real PostgreSQL through Testcontainers, never SQLite.
 - A single shared HS256 secret is appropriate for this take-home; production
   federation would normally use managed key rotation/JWKS.
 - There is no external FX pricing or ISO currency registry by design.
-- Broker smoke verification is an explicit `pnpm smoke:kafka` command so the
-  transaction test suite stays deterministic.
+- Broker smoke verification stays separate from the deterministic transaction
+  suite and runs against the complete Compose stack in CI.
 - The aggregate is repaired by snapshots; no background drift checker is added.

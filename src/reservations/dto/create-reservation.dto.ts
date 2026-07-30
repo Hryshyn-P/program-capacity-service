@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsOptional, Matches, MaxLength } from "class-validator";
-import { DECIMAL_PATTERN } from "../../common/decimal";
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from "class-validator";
+import { FX_RATE_PATTERN, MONEY_PATTERN } from "../../common/decimal";
 
 export class CreateReservationDto {
   @ApiProperty({ example: "INV-2026-001" })
@@ -9,7 +15,11 @@ export class CreateReservationDto {
   invoiceId!: string;
 
   @ApiProperty({ example: "100000.00" })
-  @Matches(DECIMAL_PATTERN)
+  @IsString()
+  @Matches(MONEY_PATTERN, {
+    message:
+      "invoiceAmount must have at most 18 integer and 6 fractional digits",
+  })
   invoiceAmount!: string;
 
   @ApiProperty({ example: "EUR" })
@@ -18,6 +28,9 @@ export class CreateReservationDto {
 
   @ApiPropertyOptional({ example: "1.080000000000" })
   @IsOptional()
-  @Matches(DECIMAL_PATTERN)
+  @IsString()
+  @Matches(FX_RATE_PATTERN, {
+    message: "fxRate must have at most 12 integer and 12 fractional digits",
+  })
   fxRate?: string;
 }

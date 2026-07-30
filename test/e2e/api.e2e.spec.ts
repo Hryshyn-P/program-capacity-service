@@ -144,6 +144,20 @@ describe("HTTP API", () => {
     await request(app.getHttpServer())
       .post("/v1/programs/program-001/reservations")
       .set("Authorization", `Bearer ${writeToken}`)
+      .send({
+        invoiceId: "TOO-PRECISE",
+        invoiceAmount: "1.0000001",
+        invoiceCurrency: "EUR",
+        fxRate: "1.0000000000001",
+      })
+      .expect(400)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ code: "VALIDATION_ERROR" }),
+      );
+
+    await request(app.getHttpServer())
+      .post("/v1/programs/program-001/reservations")
+      .set("Authorization", `Bearer ${writeToken}`)
       .send({ invoiceId: "INV-1", invoiceAmount: "25", invoiceCurrency: "USD" })
       .expect(201)
       .expect(({ body }) => expect(body.reservedAmount).toBe("25.000000"));

@@ -52,9 +52,10 @@ the same effective program-first lock order.
 ## Reconciliation
 
 A snapshot replaces the ACTIVE set for exactly one program: included rows are
-upserted, omitted active rows are released, and the stored aggregate is
-recomputed from active details. A stale version records its inbox row but does
-not mutate program state. A snapshot is validated fully before mutation.
+upserted in one set-based statement, omitted active rows are released in one
+update, and the stored aggregate is recomputed with `SUM` over active details.
+A stale version records its inbox row but does not mutate program state. A
+snapshot is validated fully before mutation.
 
 Integration assumption: a reconciliation event is an authoritative, complete
 snapshot of the program after all upstream commands represented by its
@@ -75,13 +76,16 @@ tokens from environment configuration.
 Fast Jest unit tests exercise pure money/fingerprint/schema/error behavior.
 PostgreSQL integration tests exercise real transactions, reconciliation,
 idempotency, and concurrent row locking. Supertest e2e tests exercise global
-auth, validation, and lifecycle. Kafka handler tests use PostgreSQL; a separate
-smoke path exercises the broker.
+auth, validation, and lifecycle. A separate Compose smoke path exercises Kafka
+delivery, transactional inbox deduplication, manual offset progression, and
+DLQ publishing against a real broker.
 
 ## Assumptions and trade-offs
 
 - Currency validation checks uppercase three-letter form, not a bundled ISO
   registry.
+- Program currency is immutable after creation; a currency migration is outside
+  normal capacity update and reconciliation semantics.
 - The approval client supplies the fixed FX rate. This service tracks capacity,
   but is not an FX pricing service.
 - Snapshot reservation status is accepted as ACTIVE or RELEASED; only ACTIVE

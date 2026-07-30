@@ -1,4 +1,11 @@
-import { calculateReservedAmount, fx, money, parseDecimal } from "./decimal";
+import {
+  calculateReservedAmount,
+  FX_RATE_PATTERN,
+  fx,
+  MONEY_PATTERN,
+  money,
+  parseDecimal,
+} from "./decimal";
 
 describe("decimal money rules", () => {
   it("parses decimal strings and rejects exponent/negative syntax", () => {
@@ -22,5 +29,14 @@ describe("decimal money rules", () => {
       "supported precision",
     );
     expect(() => fx("1000000000000")).toThrow("supported precision");
+  });
+
+  it("exposes database-compatible input patterns without rounding input", () => {
+    expect(MONEY_PATTERN.test("999999999999999999.999999")).toBe(true);
+    expect(MONEY_PATTERN.test("1000000000000000000")).toBe(false);
+    expect(MONEY_PATTERN.test("1.0000001")).toBe(false);
+    expect(FX_RATE_PATTERN.test("999999999999.999999999999")).toBe(true);
+    expect(FX_RATE_PATTERN.test("1000000000000")).toBe(false);
+    expect(FX_RATE_PATTERN.test("1.0000000000001")).toBe(false);
   });
 });

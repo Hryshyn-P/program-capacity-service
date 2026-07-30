@@ -39,3 +39,35 @@ jobs:
           test -f dist/src/database/data-source.js
           test -f dist/scripts/seed.js
       - run: docker build --tag program-capacity-service:ci .
+
+  compose-smoke:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Start complete stack
+        run: docker compose up --build -d
+      - name: Wait for API
+        run: |
+          timeout 180 bash -c '
+            until [ "$(curl --silent --output /dev/null --write-out "%{http_code}" \
+              http://localhost:3000/v1/programs/program-001/capacity)" = "401" ]; do
+              sleep 3
+            done
+          '
+      - name: Kafka delivery, duplicate, and DLQ smoke
+        run: timeout 120 pnpm smoke:kafka
+      - name: Inspect stack
+        if: always()
+        run: docker compose ps
+      - name: Print logs
+        if: always()
+        run: docker compose logs --no-color
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v --remove-orphans

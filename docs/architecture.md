@@ -38,6 +38,11 @@ ACTIVE rows, which repairs drift rather than trusting a supplied aggregate.
 Availability is derived and may be negative after a treasury limit reduction.
 That state blocks new reservations but not releases or reconciliation.
 
+Program currency is immutable after creation. Incremental updates and complete
+snapshots with another currency are invalid and roll back with their inbox
+claim. This prevents historical reserved amounts from being relabeled without
+an explicit accounting conversion.
+
 ## Delivery, ordering, and reconciliation
 
 Kafka delivery is at least once. `autoCommit` is disabled; the worker commits

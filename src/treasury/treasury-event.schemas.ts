@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { FX_RATE_PATTERN, MONEY_PATTERN } from "../common/decimal";
 
-const decimalString = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d+)?$/);
+const moneyString = z.string().regex(MONEY_PATTERN);
+const fxRateString = z.string().regex(FX_RATE_PATTERN);
 const postgresBigint = z
   .string()
   .regex(/^\d+$/)
@@ -24,10 +26,10 @@ const base = {
 
 const snapshotReservation = z.object({
   invoiceId: z.string().min(1).max(256),
-  invoiceAmount: decimalString,
+  invoiceAmount: moneyString,
   invoiceCurrency: currency,
-  fxRate: decimalString,
-  reservedAmount: decimalString,
+  fxRate: fxRateString,
+  reservedAmount: moneyString,
   status: z.enum(["ACTIVE", "RELEASED"]),
 });
 
@@ -35,15 +37,15 @@ export const treasuryEventSchema = z.discriminatedUnion("type", [
   z.object({
     ...base,
     type: z.literal("PROGRAM_CAPACITY_UPDATED"),
-    state: z.object({ currency, totalLimit: decimalString }),
+    state: z.object({ currency, totalLimit: moneyString }),
   }),
   z.object({
     ...base,
     type: z.literal("PROGRAM_RECONCILED"),
     state: z.object({
       currency,
-      totalLimit: decimalString,
-      declaredReservedAmount: decimalString.optional(),
+      totalLimit: moneyString,
+      declaredReservedAmount: moneyString.optional(),
       reservations: z.array(snapshotReservation),
     }),
   }),

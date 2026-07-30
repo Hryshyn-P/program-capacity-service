@@ -10,31 +10,12 @@ import {
 import { DomainError } from "../common/domain-error";
 import { Program } from "../programs/program.entity";
 import type { CreateReservationDto } from "./dto/create-reservation.dto";
+import type {
+  ReleaseResponseDto,
+  ReservationResponseDto,
+} from "./dto/reservation-response.dto";
 import { Reservation } from "./reservation.entity";
 import { reservationFingerprint } from "./fingerprint";
-
-export interface ReservationResponse {
-  reservationId: string;
-  programId: string;
-  invoiceId: string;
-  invoiceAmount: string;
-  invoiceCurrency: string;
-  programCurrency: string;
-  fxRate: string;
-  reservedAmount: string;
-  status: "ACTIVE" | "RELEASED";
-  createdAt: string;
-}
-
-export interface ReleaseResponse {
-  reservationId: string;
-  programId: string;
-  invoiceId: string;
-  releasedAmount: string;
-  programCurrency: string;
-  status: "RELEASED";
-  releasedAt: string;
-}
 
 @Injectable()
 export class ReservationsService {
@@ -43,7 +24,7 @@ export class ReservationsService {
   async reserve(
     programId: string,
     dto: CreateReservationDto,
-  ): Promise<{ created: boolean; body: ReservationResponse }> {
+  ): Promise<{ created: boolean; body: ReservationResponseDto }> {
     return this.dataSource.transaction(async (manager) => {
       const program = await this.lockProgram(manager, programId);
       const rate = this.resolveRate(dto, program.currency);
@@ -125,7 +106,7 @@ export class ReservationsService {
   async release(
     programId: string,
     invoiceId: string,
-  ): Promise<ReleaseResponse> {
+  ): Promise<ReleaseResponseDto> {
     return this.dataSource.transaction(async (manager) => {
       const program = await this.lockProgram(manager, programId);
       const reservation = await manager.findOne(Reservation, {
@@ -217,7 +198,7 @@ export class ReservationsService {
   private toReservation(
     reservation: Reservation,
     programCurrency: string,
-  ): ReservationResponse {
+  ): ReservationResponseDto {
     return {
       reservationId: reservation.id,
       programId: reservation.programId,
@@ -235,7 +216,7 @@ export class ReservationsService {
   private toRelease(
     reservation: Reservation,
     programCurrency: string,
-  ): ReleaseResponse {
+  ): ReleaseResponseDto {
     if (!reservation.releasedAt) {
       throw new DomainError(
         "DATA_INVARIANT_VIOLATION",

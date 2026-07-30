@@ -31,4 +31,36 @@ describe("treasuryEventSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("rejects money and FX values outside PostgreSQL precision and scale", () => {
+    expect(() =>
+      treasuryEventSchema.parse({
+        ...valid,
+        state: {
+          currency: "USD",
+          totalLimit: "1000000000000000000.000000",
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      treasuryEventSchema.parse({
+        ...valid,
+        type: "PROGRAM_RECONCILED",
+        state: {
+          currency: "USD",
+          totalLimit: "1.000000",
+          reservations: [
+            {
+              invoiceId: "invoice-1",
+              invoiceAmount: "1.0000001",
+              invoiceCurrency: "EUR",
+              fxRate: "1.0000000000001",
+              reservedAmount: "1.000000",
+              status: "ACTIVE",
+            },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
 });

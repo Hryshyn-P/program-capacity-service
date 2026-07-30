@@ -1,12 +1,15 @@
 import { Controller, Get, Param } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { Scopes } from "../auth/scopes.decorator";
+import { ApiErrorResponseDto } from "../common/api-error-response.dto";
 import { ProgramCapacityDto } from "./program-capacity.dto";
 import { ProgramsService } from "./programs.service";
 
@@ -23,7 +26,12 @@ export class ProgramsController {
     description: "Scope: capacity:read",
   })
   @ApiOkResponse({ type: ProgramCapacityDto })
-  @ApiNotFoundResponse({ description: "PROGRAM_NOT_FOUND" })
+  @ApiNotFoundResponse({
+    description: "PROGRAM_NOT_FOUND",
+    type: ApiErrorResponseDto,
+  })
+  @ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
+  @ApiForbiddenResponse({ type: ApiErrorResponseDto })
   getCapacity(
     @Param("programId") programId: string,
   ): Promise<ProgramCapacityDto> {

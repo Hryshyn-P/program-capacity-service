@@ -208,13 +208,14 @@ describe("capacity transactions (PostgreSQL)", () => {
     await reservations.release("p1", "A");
   });
 
-  it("rejects an incremental currency change while reservations are active", async () => {
+  it("rejects incremental currency changes and preserves historical reservation currency", async () => {
     await program();
-    await reservations.reserve("p1", {
+    const input = {
       invoiceId: "A",
       invoiceAmount: "10",
       invoiceCurrency: "USD",
-    });
+    };
+    await reservations.reserve("p1", input);
     const event = {
       eventId: randomUUID(),
       type: "PROGRAM_CAPACITY_UPDATED" as const,
@@ -234,6 +235,91 @@ describe("capacity transactions (PostgreSQL)", () => {
       totalLimit: "100.000000",
       reservedAmount: "10.000000",
       treasuryVersion: null,
+    });
+    expect(await database.getRepository(TreasuryInbox).count()).toBe(0);
+    expect((await reservations.reserve("p1", input)).body).toMatchObject({
+      programCurrency: "USD",
+      reservedAmount: "10.000000",
+    });
+
+    await reservations.release("p1", "A");
+    await expect(
+      treasury.process(
+        { ...event, eventId: randomUUID(), version: "3" },
+        { topic: "t", partition: 0, offset: "2" },
+      ),
+    ).rejects.toMatchObject({
+      code: "INVALID_TREASURY_EVENT",
+      details: {
+        programId: "p1",
+        currentCurrency: "USD",
+        incomingCurrency: "EUR",
+      },
+    });
+    expect(
+      await database.getRepository(Program).findOneByOrFail({ id: "p1" }),
+    ).toMatchObject({ currency: "USD", treasuryVersion: null });
+  });
+
+  it("rejects reconciliation currency changes and rolls the inbox back", async () => {
+    await program();
+    await reservations.reserve("p1", {
+      invoiceId: "ORIGINAL",
+      invoiceAmount: "10",
+      invoiceCurrency: "USD",
+    });
+    const event = {
+      eventId: randomUUID(),
+      type: "PROGRAM_RECONCILED" as const,
+      programId: "p1",
+      version: "2",
+      occurredAt: new Date().toISOString(),
+      state: {
+        currency: "EUR",
+        totalLimit: "100.000000",
+        declaredReservedAmount: "0.000000",
+        reservations: [],
+      },
+    };
+
+    await expect(
+      treasury.process(event, { topic: "t", partition: 0, offset: "1" }),
+    ).rejects.toMatchObject({ code: "INVALID_TREASURY_EVENT" });
+    expect(
+      await database.getRepository(Program).findOneByOrFail({ id: "p1" }),
+    ).toMatchObject({
+      currency: "USD",
+      reservedAmount: "10.000000",
+      treasuryVersion: null,
+    });
+    expect(
+      await database
+        .getRepository(Reservation)
+        .findOneByOrFail({ programId: "p1", invoiceId: "ORIGINAL" }),
+    ).toMatchObject({ status: "ACTIVE", reservedAmount: "10.000000" });
+    expect(await database.getRepository(TreasuryInbox).count()).toBe(0);
+  });
+
+  it("normalizes treasury precision failures", async () => {
+    await program();
+    await expect(
+      treasury.process(
+        {
+          eventId: randomUUID(),
+          type: "PROGRAM_CAPACITY_UPDATED",
+          programId: "p1",
+          version: "2",
+          occurredAt: new Date().toISOString(),
+          state: {
+            currency: "USD",
+            totalLimit: "1000000000000000000",
+          },
+        },
+        { topic: "t", partition: 0, offset: "1" },
+      ),
+    ).rejects.toMatchObject({
+      code: "INVALID_TREASURY_EVENT",
+      details: { cause: "VALIDATION_ERROR" },
     });
     expect(await database.getRepository(TreasuryInbox).count()).toBe(0);
   });

@@ -66,8 +66,10 @@ export class TreasuryConsumerService
       });
       await this.consumer.run({
         autoCommit: false,
-        eachMessage: async ({ topic, partition, message }) => {
+        eachMessage: async (payload) => {
+          const { topic, partition, message } = payload;
           const offset = message.offset;
+          await payload.heartbeat();
           try {
             const parsedJson: unknown = JSON.parse(
               message.value?.toString("utf8") ?? "",
@@ -119,6 +121,7 @@ export class TreasuryConsumerService
               ],
             });
           }
+          await payload.heartbeat();
           await this.consumer.commitOffsets([
             { topic, partition, offset: (BigInt(offset) + 1n).toString() },
           ]);
@@ -142,8 +145,7 @@ export class TreasuryConsumerService
     return (
       error instanceof SyntaxError ||
       (error instanceof DomainError &&
-        (error.code === "INVALID_TREASURY_EVENT" ||
-          error.code === "VALIDATION_ERROR")) ||
+        error.code === "INVALID_TREASURY_EVENT") ||
       (error instanceof Error && error.name === "ZodError")
     );
   }
