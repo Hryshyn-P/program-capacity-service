@@ -7,10 +7,11 @@ snapshots.
 ## Architecture
 
 ```text
-client --JWT--> API ----+
-                       +--> PostgreSQL (program row locks + inbox)
-Kafka --> worker -------+
-             \--> DLQ for invalid events
+client --JWT--> API -----------+
+                               +--> PostgreSQL (program row locks + inbox)
+Kafka --------> worker --------+
+                  |
+                  +--> DLQ for invalid events
 ```
 
 One repository and one shared application model produce two processes:
@@ -25,13 +26,25 @@ transactions consistent while allowing independent operational scaling. See
 The complete local stack:
 
 ```bash
-docker compose up --build
+docker compose up --build -d --wait
+pnpm smoke:kafka
 ```
 
 This starts PostgreSQL, native KRaft Kafka (no ZooKeeper), runs migrations,
 idempotently seeds `program-001`, then starts API and worker. Production
 containers execute compiled JavaScript directly with Node.js; pnpm and Corepack
-are build-time tools and are not required at runtime.
+are build-time tools and are not required at runtime. The API waits for
+migrations and seed but does not depend on Kafka; the worker requires both
+PostgreSQL and a healthy broker.
+
+PostgreSQL and Kafka use the `postgres-data` and `kafka-data` named volumes.
+They must be retained or reset together because `treasury_inbox` source
+positions correspond to offsets in the Kafka log:
+
+```bash
+docker compose down      # stop while retaining both volumes
+docker compose down -v   # destructive clean reset of both volumes
+```
 
 For host development, copy `.env.example` to `.env`, start dependencies, then:
 
@@ -75,10 +88,11 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
   http://localhost:3000/v1/programs/program-001/reservations/INV-2026-001/release
 ```
 
-All routes authenticate JWT signature, expiry, issuer, and audience. Endpoints
-also require `capacity:read` or `capacity:write`. Authenticated raw OpenAPI JSON
-is at `GET /v1/docs`; raw JSON was chosen so no Swagger static asset route can
-bypass the global guard.
+All routes authenticate JWT signature, expiry, issuer, and audience. Business
+endpoints also require `capacity:read` or `capacity:write`. Authenticated raw
+OpenAPI JSON is at `GET /v1/docs` and requires a valid token but no business
+scope; raw JSON was chosen so no Swagger static asset route can bypass the
+global guard.
 
 ## Kafka
 
@@ -91,18 +105,19 @@ pnpm kafka:publish -- reconcile program-001
 pnpm smoke:kafka
 ```
 
-Both event types contain UUID `eventId`, decimal-string monetary fields,
-decimal-string `version`, ISO timestamp, and state. `PROGRAM_CAPACITY_UPDATED`
-updates the limit while preserving reservations; it cannot change currency.
-`PROGRAM_RECONCILED` supplies the complete
-reservation set and optional declared active aggregate.
+Both event types contain UUID `eventId`, decimal-string monetary fields, a
+PostgreSQL-bigint-compatible integer-string `version`, ISO timestamp, and state.
+`PROGRAM_CAPACITY_UPDATED` updates the limit while preserving reservations; it
+cannot change currency. `PROGRAM_RECONCILED` supplies the complete reservation
+set and optional declared active aggregate.
 
 `pnpm smoke:kafka` creates an isolated `smoke-*` program, publishes both event
 types, replays a duplicate, verifies an invalid payload in the DLQ, and polls
-the authenticated HTTP API to prove the broker-to-database path. Run it after
-`docker compose up --build`; it honors the JWT and Kafka variables from `.env`
-and otherwise uses the same local defaults as Compose. CI runs this probe
-against the complete Compose stack.
+the authenticated HTTP API to prove the broker-to-database path. It also checks
+that the worker commits the next source offset. Run it after
+`docker compose up --build -d --wait`; it honors the JWT and Kafka variables
+from `.env` and otherwise uses the same local defaults as Compose. CI runs this
+probe against the complete Compose stack.
 
 ## Correctness semantics
 
@@ -145,6 +160,8 @@ pnpm build
 ```
 
 Integration/e2e tests use real PostgreSQL through Testcontainers, never SQLite.
+E2e auth coverage includes missing and malformed tokens, expiry, issuer,
+audience, scopes, and protection of the OpenAPI document.
 
 ## Known limitations
 
@@ -154,3 +171,6 @@ Integration/e2e tests use real PostgreSQL through Testcontainers, never SQLite.
 - Broker smoke verification stays separate from the deterministic transaction
   suite and runs against the complete Compose stack in CI.
 - The aggregate is repaired by snapshots; no background drift checker is added.
+- KafkaJS 2.2.4 can emit a Node.js 24 `TimeoutNegativeWarning` from its internal
+  request-queue scheduler. Node clamps that timer to 1 ms; delivery, duplicate,
+  DLQ, and offset smoke checks still pass.

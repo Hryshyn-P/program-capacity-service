@@ -23,6 +23,23 @@
 The API and worker are two operational entrypoints from one codebase and image.
 They share no HTTP interface. PostgreSQL is their consistency boundary.
 
+## Runtime dependencies and persistence
+
+Compose runs migration and seed jobs before the application processes. The API
+depends on successful seed completion and PostgreSQL, but not on Kafka, so HTTP
+capacity operations remain independently deployable when the broker is
+unavailable. The worker depends on completed migrations and a healthy Kafka
+broker.
+
+Local PostgreSQL state uses the `postgres-data` named volume. Kafka metadata,
+records, consumer offsets, and topic state use `kafka-data`, mounted at
+`/mnt/shared/config` with broker logs under `/mnt/shared/config/data`. The two
+volumes form one local durability set: `treasury_inbox` positions are meaningful
+only relative to the retained Kafka log. Normal `docker compose down` retains
+both; `docker compose down -v` intentionally resets both. Persisting Kafka
+prevents a recreated broker from restarting at offset zero while PostgreSQL
+still contains old source positions.
+
 ## Transaction model
 
 The program row is the serialization point because every capacity decision

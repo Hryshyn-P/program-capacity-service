@@ -10,6 +10,11 @@ PostgreSQL database; they never call each other.
 This is intentionally a modular monolith with operational process separation.
 It avoids CQRS frameworks, repository wrappers, Redis, and event sourcing.
 
+Compose runs migrations and seed before the API. The API has no Kafka startup
+dependency; the worker waits for migrations and a healthy broker. PostgreSQL
+and Kafka use separate named volumes that are retained or reset together so
+transactional inbox source positions remain aligned with the broker log.
+
 ## Data model
 
 - `programs`: currency, treasury-owned total limit/version, and the
@@ -39,15 +44,14 @@ go to the DLQ with source metadata and a normalized failure.
 
 ## Concurrency and idempotency
 
-Every mutation starts a transaction and locks its program row before reading
-reservation state. This serializes capacity checks without stronger global
-isolation. HTTP retries compare the business key and deterministic SHA-256
-fingerprint. Kafka retries are deduplicated by both event ID and source
-topic/partition/offset in the inbox.
-
-For a not-yet-existing program arriving from Kafka, the transaction first
-performs a conflict-safe insert, then locks the resulting row. All paths retain
-the same effective program-first lock order.
+API reserve and release transactions lock the program row before reading
+reservation state. A treasury transaction claims its inbox row first, performs
+a conflict-safe program insert if necessary, and then locks the program before
+changing reservations or aggregates. No path acquires an inbox row after
+locking a program, so there is no inverse lock order. Program-row serialization
+protects capacity checks without stronger global isolation. HTTP retries compare
+the business key and deterministic SHA-256 fingerprint. Kafka retries are
+deduplicated by both event ID and source topic/partition/offset in the inbox.
 
 ## Reconciliation
 
@@ -76,9 +80,11 @@ tokens from environment configuration.
 Fast Jest unit tests exercise pure money/fingerprint/schema/error behavior.
 PostgreSQL integration tests exercise real transactions, reconciliation,
 idempotency, and concurrent row locking. Supertest e2e tests exercise global
-auth, validation, and lifecycle. A separate Compose smoke path exercises Kafka
-delivery, transactional inbox deduplication, manual offset progression, and
-DLQ publishing against a real broker.
+auth (including expiry, issuer, audience, scopes, and OpenAPI protection),
+validation, and lifecycle. A separate Compose smoke path exercises Kafka
+delivery, transactional inbox deduplication, manual offset progression, and DLQ
+publishing against a real broker. Compose persistence is verified by retaining
+both PostgreSQL and Kafka state across broker/container recreation.
 
 ## Assumptions and trade-offs
 
