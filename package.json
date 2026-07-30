@@ -24,7 +24,7 @@
     "test:e2e": "jest --selectProjects e2e --runInBand",
     "migration:run": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
     "migration:revert": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:revert",
-    "migration:run:prod": "typeorm -d dist/src/database/data-source.js migration:run",
+    "migration:run:prod": "node dist/scripts/run-migrations.js",
     "seed": "node --import tsx scripts/seed.ts",
     "auth:token": "node --import tsx scripts/auth-token.ts",
     "kafka:publish": "node --import tsx scripts/kafka-publish.ts",

@@ -29,7 +29,9 @@ docker compose up --build
 ```
 
 This starts PostgreSQL, native KRaft Kafka (no ZooKeeper), runs migrations,
-idempotently seeds `program-001`, then starts API and worker.
+idempotently seeds `program-001`, then starts API and worker. Production
+containers execute compiled JavaScript directly with Node.js; pnpm and Corepack
+are build-time tools and are not required at runtime.
 
 For host development, copy `.env.example` to `.env`, start dependencies, then:
 

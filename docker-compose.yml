@@ -38,7 +38,7 @@ services:
 
   migrate:
     build: .
-    command: ["pnpm", "migration:run:prod"]
+    command: ["node", "dist/scripts/run-migrations.js"]
     environment: &app-env
       NODE_ENV: production
       PORT: 3000
@@ -64,7 +64,7 @@ services:
 
   api:
     build: .
-    command: ["pnpm", "start:api"]
+    command: ["node", "dist/src/main.js"]
     environment: *app-env
     ports: ["3000:3000"]
     depends_on:
@@ -73,7 +73,7 @@ services:
 
   worker:
     build: .
-    command: ["pnpm", "start:worker"]
+    command: ["node", "dist/src/worker.js"]
     environment: *app-env
     depends_on:
       migrate: { condition: service_completed_successfully }

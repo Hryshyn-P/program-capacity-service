@@ -19,10 +19,10 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://capacity:capacity@localhost:5432/capacity_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: 10.14.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
@@ -37,6 +37,7 @@ jobs:
           test -f dist/src/main.js
           test -f dist/src/worker.js
           test -f dist/src/database/data-source.js
+          test -f dist/scripts/run-migrations.js
           test -f dist/scripts/seed.js
       - run: docker build --tag program-capacity-service:ci .
 
@@ -44,10 +45,10 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: 10.14.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Start complete stack
@@ -64,7 +65,7 @@ jobs:
         run: timeout 120 pnpm smoke:kafka
       - name: Inspect stack
         if: always()
-        run: docker compose ps
+        run: docker compose ps -a
       - name: Print logs
         if: always()
         run: docker compose logs --no-color

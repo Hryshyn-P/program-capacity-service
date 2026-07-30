@@ -375,4 +375,63 @@ describe("capacity transactions (PostgreSQL)", () => {
     ).rejects.toMatchObject({ code: "INVALID_TREASURY_EVENT" });
     expect(await database.getRepository(TreasuryInbox).count()).toBe(1);
   });
+
+  it("bulk reconciles a large authoritative snapshot and deduplicates replay", async () => {
+    await program("2000.000000");
+    await reservations.reserve("p1", {
+      invoiceId: "OMITTED",
+      invoiceAmount: "10",
+      invoiceCurrency: "USD",
+    });
+    const event = {
+      eventId: randomUUID(),
+      type: "PROGRAM_RECONCILED" as const,
+      programId: "p1",
+      version: "10",
+      occurredAt: new Date().toISOString(),
+      state: {
+        currency: "USD",
+        totalLimit: "2000.000000",
+        declaredReservedAmount: "1000.000000",
+        reservations: Array.from({ length: 1000 }, (_, index) => ({
+          invoiceId: `BULK-${index.toString().padStart(4, "0")}`,
+          invoiceAmount: "1.000000",
+          invoiceCurrency: "USD",
+          fxRate: "1.000000000000",
+          reservedAmount: "1.000000",
+          status: "ACTIVE" as const,
+        })),
+      },
+    };
+    const position = { topic: "t", partition: 0, offset: "10" };
+
+    expect((await treasury.process(event, position)).outcome).toBe("APPLIED");
+    expect((await treasury.process(event, position)).outcome).toBe("DUPLICATE");
+
+    expect(
+      await database.getRepository(Program).findOneByOrFail({ id: "p1" }),
+    ).toMatchObject({
+      reservedAmount: "1000.000000",
+      treasuryVersion: "10",
+    });
+    expect(
+      await database
+        .getRepository(Reservation)
+        .findOneByOrFail({ programId: "p1", invoiceId: "OMITTED" }),
+    ).toMatchObject({ status: "RELEASED" });
+    expect(
+      await database
+        .getRepository(Reservation)
+        .countBy({ programId: "p1", status: "ACTIVE" }),
+    ).toBe(1000);
+    const aggregateRows = await database.query<Array<{ total: string }>>(
+      `SELECT COALESCE(SUM(reserved_amount), 0)::text AS total
+       FROM invoice_reservations
+       WHERE program_id = $1
+         AND status = 'ACTIVE'`,
+      ["p1"],
+    );
+    expect(aggregateRows[0]?.total).toBe("1000.000000");
+    expect(await database.getRepository(TreasuryInbox).count()).toBe(1);
+  });
 });

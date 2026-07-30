@@ -28,9 +28,13 @@ They share no HTTP interface. PostgreSQL is their consistency boundary.
 The program row is the serialization point because every capacity decision
 changes one program. At PostgreSQL's default `READ COMMITTED` isolation level,
 `SELECT ... FOR UPDATE` makes concurrent capacity checks wait and observe the
-latest committed aggregate. Every mutation locks program first, then reads or
-changes reservations, then changes the aggregate. Consistent ordering avoids
-deadlocks and prevents oversubscription without serializing unrelated programs.
+latest committed aggregate. API reserve and release transactions lock the
+program before reading reservations. A treasury transaction first claims its
+idempotency inbox row, then creates the program if needed and locks it before
+changing reservations or aggregates. The inbox has no foreign key to a program
+and no other path locks it after a program, so this ordering introduces no
+conflicting lock cycle. Consistent program-row serialization prevents
+oversubscription without blocking unrelated programs.
 
 `reserved_amount` is stored for constant-time reads and checks. Reservation
 details remain authoritative. Reconciliation recalculates the aggregate from
