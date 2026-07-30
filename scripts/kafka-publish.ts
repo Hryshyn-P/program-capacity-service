@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { Kafka } from "kafkajs";
+import { Kafka, Partitioners } from "kafkajs";
 import { treasuryEventSchema } from "../src/treasury/treasury-event.schemas";
 
 async function publish(): Promise<void> {
@@ -50,7 +50,9 @@ async function publish(): Promise<void> {
     clientId: `${process.env.KAFKA_CLIENT_ID ?? "program-capacity"}-publisher`,
     brokers: (process.env.KAFKA_BROKERS ?? "localhost:9092").split(","),
   });
-  const producer = kafka.producer();
+  const producer = kafka.producer({
+    createPartitioner: Partitioners.DefaultPartitioner,
+  });
   await producer.connect();
   try {
     await producer.send({

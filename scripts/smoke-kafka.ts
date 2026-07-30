@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
-import { Kafka } from "kafkajs";
+import { Kafka, Partitioners } from "kafkajs";
 import { treasuryEventSchema } from "../src/treasury/treasury-event.schemas";
 
 interface CapacityResponse {
@@ -126,7 +126,9 @@ async function main(): Promise<void> {
       .split(",")
       .map((broker) => broker.trim()),
   });
-  const producer = kafka.producer();
+  const producer = kafka.producer({
+    createPartitioner: Partitioners.DefaultPartitioner,
+  });
   await producer.connect();
   try {
     const topic = process.env.KAFKA_TOPIC ?? "treasury.program-capacity";

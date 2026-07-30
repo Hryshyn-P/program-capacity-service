@@ -26,6 +26,6 @@ import { ReservationsModule } from "./reservations/reservations.module";
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes("*");
+    consumer.apply(RequestIdMiddleware).forRoutes("{*path}");
   }
 }
