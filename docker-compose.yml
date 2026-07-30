@@ -30,11 +30,14 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /mnt/shared/config/data
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 29092"]
       interval: 5s
       timeout: 5s
       retries: 30
+    volumes:
+      - kafka-data:/mnt/shared/config
 
   migrate:
     build: .
@@ -69,7 +72,6 @@ services:
     ports: ["3000:3000"]
     depends_on:
       seed: { condition: service_completed_successfully }
-      kafka: { condition: service_healthy }
 
   worker:
     build: .
@@ -81,3 +83,4 @@ services:
 
 volumes:
   postgres-data:
+  kafka-data:

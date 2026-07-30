@@ -1,7 +1,9 @@
 import "reflect-metadata";
 import { ValidationPipe } from "@nestjs/common";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Test } from "@nestjs/testing";
 import jwt from "jsonwebtoken";
+import type { SignOptions } from "jsonwebtoken";
 import request from "supertest";
 import {
   GenericContainer,
@@ -11,6 +13,7 @@ import {
 import type { INestApplication } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { ApiErrorFilter } from "../../src/common/api-error.filter";
+import { DocsController } from "../../src/docs.controller";
 import { Program } from "../../src/programs/program.entity";
 
 jest.setTimeout(120_000);
@@ -65,6 +68,14 @@ describe("HTTP API", () => {
       }),
     );
     app.useGlobalFilters(new ApiErrorFilter());
+    DocsController.document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder()
+        .setTitle("Program Capacity Service")
+        .setVersion("1.0")
+        .addBearerAuth()
+        .build(),
+    );
     await app.init();
     const database = app.get(DataSource);
     await database.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
@@ -79,6 +90,7 @@ describe("HTTP API", () => {
   });
 
   afterAll(async () => {
+    DocsController.document = undefined;
     if (app) await app.close();
     if (container) await container.stop();
   });
@@ -86,12 +98,14 @@ describe("HTTP API", () => {
   function token(
     scopes: string[],
     overrides: Record<string, unknown> = {},
+    options: SignOptions = {},
   ): string {
     return jwt.sign({ scope: scopes, ...overrides }, secret, {
       subject: "test-client",
       issuer: "program-capacity-service",
       audience: "program-capacity-api",
       expiresIn: "1h",
+      ...options,
     });
   }
 
@@ -112,6 +126,36 @@ describe("HTTP API", () => {
       .set("Authorization", `Bearer ${token(["capacity:read"])}`)
       .expect(200)
       .expect(({ body }) => expect(body.availableAmount).toBe("100.000000"));
+  });
+
+  it.each([
+    ["expired token", token(["capacity:read"], {}, { expiresIn: -1 })],
+    [
+      "token with the wrong issuer",
+      token(["capacity:read"], {}, { issuer: "another-service" }),
+    ],
+    [
+      "token with the wrong audience",
+      token(["capacity:read"], {}, { audience: "another-api" }),
+    ],
+  ])("rejects %s", async (_description, bearerToken) => {
+    await request(app.getHttpServer())
+      .get("/v1/programs/program-001/capacity")
+      .set("Authorization", `Bearer ${bearerToken}`)
+      .expect(401);
+  });
+
+  it("protects the OpenAPI document", async () => {
+    await request(app.getHttpServer()).get("/v1/docs").expect(401);
+    await request(app.getHttpServer())
+      .get("/v1/docs")
+      .set("Authorization", `Bearer ${token([])}`)
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          info: { title: "Program Capacity Service", version: "1.0" },
+        }),
+      );
   });
 
   it("normalizes framework errors and propagates the request ID", async () => {
